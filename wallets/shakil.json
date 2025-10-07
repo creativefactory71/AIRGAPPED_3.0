@@ -1,0 +1,35 @@
+{
+  "seed_phrase": "collect cook language analyst talk afraid abstract style zebra orange good slab",
+  "accounts": [
+    {
+      "network_key": "ETH",
+      "network_type": "evm",
+      "derivation_path": "m/44'/60'/0'/0/0",
+      "index": 0,
+      "address": "0x3648E756329107b556588A7482Adc54C07837C1E",
+      "public_key": "0419480cc67c662b11345cbbaa0e1dbd1a3f625c3681c560f886c7a2fa8be946bfe784de6231e43a64b3b804c72bd60fed4e69db860a524440b2e09f0f78172460",
+      "private_key": "e8acb1e1c79d00919639cd272216f5516bed5c3b0f52fcd4ed98ee32d692d31f"
+    },
+    {
+      "network_key": "BTC",
+      "network_type": "utxo",
+      "address_type": "P2WPKH",
+      "derivation_path": "m/84'/0'/0'/0/0",
+      "index": 0,
+      "address": "bc1qs39x6k737t4l2vf8dhqvkdulvl7fgx5emsjxq4",
+      "public_key": "0331ce4f633f510dfdaa96fe0e45322907c51c08fc7c06decc80bfbbcf801d2860",
+      "private_key": "L49bi1FDZ312qRk684K53vuxZ6LPsKEzoGFyCmTv2xyBRaMyt2oh"
+    },
+    {
+      "network_key": "Q",
+      "network_type": "evm",
+      "derivation_path": "m/44'/60'/0'/0/0",
+      "index": 0,
+      "address": "0x3648E756329107b556588A7482Adc54C07837C1E",
+      "public_key": "0419480cc67c662b11345cbbaa0e1dbd1a3f625c3681c560f886c7a2fa8be946bfe784de6231e43a64b3b804c72bd60fed4e69db860a524440b2e09f0f78172460",
+      "private_key": "e8acb1e1c79d00919639cd272216f5516bed5c3b0f52fcd4ed98ee32d692d31f"
+    }
+  ],
+  "created_at": "2025-10-05T19:34:38.455314Z",
+  "updated_at": "2025-10-05T19:34:38.455323Z"
+}

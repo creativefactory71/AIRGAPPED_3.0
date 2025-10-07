@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "networks": [
+    {
+      "key": "ETH",
+      "name": "Ethereum",
+      "type": "evm",
+      "symbol": "ETH",
+      "chain_id": 1,
+      "derivation_path": "m/44'/60'/0'/0/{index}"
+    },
+    {
+      "key": "BTC",
+      "name": "Bitcoin",
+      "type": "utxo",
+      "symbol": "BTC",
+      "address_type": "P2WPKH",
+      "coin_type": 0,
+      "derivation_path": "m/84'/0'/0'/0/{index}"
+    },
+    {
+      "key": "Q",
+      "name": "q",
+      "type": "evm",
+      "symbol": "Q",
+      "chain_id": 1,
+      "derivation_path": "m/44'/60'/0'/0/{index}"
+    },
+    {
+      "key": "XDC",
+      "name": "Xinfin",
+      "type": "evm",
+      "symbol": "",
+      "chain_id": 50,
+      "derivation_path": "m/44'/60'/0'/0/{index}"
+    },
+    {
+      "key": "XRP",
+      "name": "XRP Ledger",
+      "type": "xrp",
+      "symbol": "XRP",
+      "derivation_path": "m/44'/144'/0'/0/{index}"
+    }
+  ]
+}

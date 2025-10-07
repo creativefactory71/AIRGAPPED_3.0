@@ -1,0 +1,35 @@
+{
+  "seed_phrase": "excite raccoon inform ahead breeze visa catalog pluck icon stairs sock jeans",
+  "accounts": [
+    {
+      "network_key": "ETH",
+      "network_type": "evm",
+      "derivation_path": "m/44'/60'/0'/0/0",
+      "index": 0,
+      "address": "0xb5Cd926b42E30bD043C71673C326969570ba9b54",
+      "public_key": "04082f8c853ba24115996de4aea940020a86d6cad55931e35bdaf98572b33c449a0d1a05348f13ace64acd72d084034848e563d7fad729902c637b8495b10776b6",
+      "private_key": "fd3684935a929b2d209271c9a8276319816284620eab9906b35b9864c001e909"
+    },
+    {
+      "network_key": "BTC",
+      "network_type": "utxo",
+      "address_type": "P2WPKH",
+      "derivation_path": "m/84'/0'/0'/0/0",
+      "index": 0,
+      "address": "bc1qfufh0wqjffp75h2mzec8q7maact545mnqvrkgg",
+      "public_key": "0380a855714e6031aeba742e126b5f1d0807b063fe6f43369eada5f2ff5ee21f01",
+      "private_key": "KwJ9e1mGm22DcKwSag6NGb9oh6ji1W9X69ELwxJxPMbjdcQyNFSW"
+    },
+    {
+      "network_key": "Q",
+      "network_type": "evm",
+      "derivation_path": "m/44'/60'/0'/0/0",
+      "index": 0,
+      "address": "0xb5Cd926b42E30bD043C71673C326969570ba9b54",
+      "public_key": "04082f8c853ba24115996de4aea940020a86d6cad55931e35bdaf98572b33c449a0d1a05348f13ace64acd72d084034848e563d7fad729902c637b8495b10776b6",
+      "private_key": "fd3684935a929b2d209271c9a8276319816284620eab9906b35b9864c001e909"
+    }
+  ],
+  "created_at": "2025-10-05T19:55:51.076294Z",
+  "updated_at": "2025-10-05T19:55:51.076303Z"
+}
