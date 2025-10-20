@@ -1,4 +1,4 @@
 {
-  "theme": "amoled",
-  "ui_mode": "grid"
+  "ui_mode": "compact",
+  "theme": "contrast"
 }

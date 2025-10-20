@@ -1,142 +1,147 @@
-# receive_flow.py
-import pygame
-from stores.settings import get_display_mode
+# flows/receive_flow.py
+import json, time, pygame
+from pathlib import Path
+
+from stores.wallet_store import load_active_wallet
 from stores.network_store import list_networks
-from stores.wallet_store import load_wallet
-import qrcode
-from PIL import Image
-from qr.qr_scanner import QRScanner
+from debug import dbg
+from qr.qr_chunker import show_paged
 
-WHITE=(255,255,255); BLACK=(0,0,0); OUT=(0,0,0); BG=(238,238,238)
-
-def _qr_surface(data, size=180):
-    qr=qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_Q, box_size=4, border=1)
-    qr.add_data(data); qr.make(fit=True)
-    img=qr.make_image(fill_color="black", back_color="white").convert("RGB")
-    img=img.resize((size,size), Image.NEAREST)
-    mode,size,data2=img.mode,img.size,img.tobytes()
-    import pygame as pg
-    return pg.image.fromstring(data2, size, mode)
+WHITE=(255,255,255); BLACK=(0,0,0); OUT=(0,0,0)
 
 class ReceiveFlow:
     """
-    RECEIVE:
-      - Show my address QR
-      - New: 'Scan Invoice' (webcam) to parse simple payment URIs (EIP-681 / BIP-21)
+    Select Network -> Show address (and QR if available).
+    Returns:
+      None        -> caller just redraws Home
+      "HOME"      -> caller should go Home immediately
+      "SETTINGS"  -> caller should open Settings
     """
-    def __init__(self, screen, renderer, title_font, body_font):
-        self.sc=screen; self.r=renderer; self.tf=title_font; self.bf=body_font
-        self.sw,self.sh=screen.get_size()
+    def __init__(self, screen, renderer, title_font, body_font, pump_input=None):
+        self.sc=screen; self.r=renderer
+        self.tf=title_font; self.bf=body_font
+        self.sw,self.sh = screen.get_size()
+        self.pump_input = pump_input
+        self._down = None
+        self._ignore_until = 0.0
 
+    def _pump(self):
+        if self.pump_input: self.pump_input()
+
+    def _debounce_on_entry(self):
+        pygame.event.clear([pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION])
+        self._ignore_until = time.time() + 0.15
+
+    # ---------------- public ----------------
     def run(self):
-        nets=list_networks()
-        labels=[n["name"] for n in nets]+["Back"]
-        rects=self.r.draw_menu("Receive → Select Network", labels, get_display_mode(self.r.settings))
-        while True:
-            for ev in pygame.event.get():
-                if ev.type==pygame.QUIT: return
-                if ev.type==pygame.MOUSEBUTTONDOWN and ev.button==1:
-                    hit=self.r.hit_test(rects, ev.pos)
-                    if hit is None: break
-                    if hit==len(labels)-1: return
-                    self._show_for_network(nets[hit])
+        self._debounce_on_entry()
+        nets = list_networks()
+        labels = [f"{n['key']} · {n['name']} ({n['type']})" for n in nets] + ["Back"]
+        rects = self.r.draw_menu("Receive → Select Network", labels, self.r.settings.get("ui_mode","grid"))
+        pygame.display.update()
 
-    def _show_for_network(self, net):
-        w=load_wallet()
-        acct=next((a for a in w["accounts"] if a["network_key"]==net["key"]), None)
-        self.sc.fill(WHITE)
-        self.sc.blit(self.tf.render(f"{net['name']} Receive", True, BLACK),(8,6))
+        while True:
+            self._pump()
+            for ev in pygame.event.get():
+                if ev.type==pygame.QUIT: return None
+                if ev.type==pygame.MOUSEBUTTONDOWN and ev.button==1:
+                    if time.time() < self._ignore_until: continue
+                    # bottom bar first
+                    bh = self.r.bottom_hit(ev.pos)
+                    if bh == "back": return None
+                    if bh == "home": return "HOME"
+                    if bh == "opts": return "SETTINGS"
+                    self._down = self.r.hit_test(rects, ev.pos)
+                if ev.type==pygame.MOUSEBUTTONUP and ev.button==1:
+                    up = self.r.hit_test(rects, ev.pos)
+                    if self._down is not None and up == self._down:
+                        if up == len(labels)-1:  # Back
+                            return None
+                        net = nets[up]
+                        nav = self._show_address_for_network(net)
+                        if nav in ("HOME","SETTINGS"): return nav
+                        # redraw selection after returning
+                        self._debounce_on_entry()
+                        rects = self.r.draw_menu("Receive → Select Network", labels, self.r.settings.get("ui_mode","grid"))
+                        pygame.display.update()
+                    self._down = None
+            pygame.time.Clock().tick(30)
+
+    # ---------------- helpers ----------------
+    def _show_address_for_network(self, net):
+        self._debounce_on_entry()
+        w = load_active_wallet()
+        if not w:
+            return self._alert("No active wallet.\nGo Settings → Wallets to set one.")
+        acct = next((a for a in w.get("accounts", []) if a.get("network_key")==net["key"]), None)
         if not acct:
-            self.sc.blit(self.bf.render("No account found. Create/Restore first.", True, BLACK),(8,28))
-            pygame.display.flip(); self._wait_back(); return
-        addr=acct["address"]; pub=acct["public_key"]
-        # address block
-        box=pygame.Rect(8, 28, self.sw-16, 46)
-        pygame.draw.rect(self.sc, BG, box, border_radius=8); pygame.draw.rect(self.sc, OUT, box, 1, border_radius=8)
-        self.sc.blit(self.bf.render(addr, True, BLACK), (box.x+6, box.y+14))
-        qr=_qr_surface(addr, 120); rect=qr.get_rect(center=(self.sw//2, self.sh//2+4))
-        self.sc.blit(qr, rect)
-        # buttons
-        btn_pub   = pygame.Rect(8, self.sh-26, 84, 20)
-        btn_scan  = pygame.Rect(98, self.sh-26, 92, 20)
-        btn_back  = pygame.Rect(self.sw-60, self.sh-26, 52, 20)
-        for r,l in ((btn_pub,"PubKey QR"), (btn_scan,"Scan Invoice"), (btn_back,"Back")):
-            pygame.draw.rect(self.sc, (220,220,220), r, border_radius=6); pygame.draw.rect(self.sc, OUT, r, 1, border_radius=6)
-            self.sc.blit(self.bf.render(l, True, BLACK),(r.x+6, r.y+2))
-        pygame.display.flip()
+            return self._alert("Active wallet has no account for this network.")
 
-        # loop
+        addr = acct.get("address","")
+        dbg(f"Receive: {net['key']} addr={addr}")
+
+        btn_back = pygame.Rect(8, self.sh-26, 60, 20)
+        btn_qrpg = pygame.Rect(self.sw-120, self.sh-26, 112, 20)
+
         while True:
+            self._pump()
+            self.sc.fill(WHITE)
+            self.sc.blit(self.tf.render(f"{net['key']} Receive", True, BLACK),(8,6))
+
+            # content
+            y = 30
+            self.sc.blit(self.bf.render("Address:", True, BLACK), (8,y)); y+=18
+            for line in [addr[i:i+26] for i in range(0,len(addr),26)]:
+                self.sc.blit(self.bf.render(line, True, BLACK), (8,y)); y+=16
+
+            # local buttons
+            for r,l in ((btn_back,"Back"),(btn_qrpg,"Show QR (paged)")):
+                pygame.draw.rect(self.sc,(230,230,230),r,border_radius=6)
+                pygame.draw.rect(self.sc,OUT,r,1,border_radius=6)
+                self.sc.blit(self.bf.render(l, True, BLACK),(r.x+6, r.y+2))
+
+            # bottom nav
+            self.r.draw_bottom_nav()
+            pygame.display.update()
+
             for ev in pygame.event.get():
-                if ev.type==pygame.QUIT: return
+                if ev.type==pygame.QUIT: return None
                 if ev.type==pygame.MOUSEBUTTONDOWN and ev.button==1:
-                    if btn_back.collidepoint(ev.pos): return
-                    if btn_pub.collidepoint(ev.pos):
-                        self._qr_modal(pub, "Public Key")
-                    if btn_scan.collidepoint(ev.pos):
-                        data = QRScanner(self.sc, self.tf, self.bf).scan()
-                        if data:
-                            self._show_invoice_info(net, data)
+                    if time.time() < self._ignore_until: continue
+                    # bottom nav?
+                    bh = self.r.bottom_hit(ev.pos)
+                    if bh == "back": return None
+                    if bh == "home": return "HOME"
+                    if bh == "opts": return "SETTINGS"
+                    # local?
+                    if btn_back.collidepoint(ev.pos):
+                        return None
+                    if btn_qrpg.collidepoint(ev.pos):
+                        show_paged(self.sc, addr, self.tf, self.bf, chunk_size=350, pump_input=self.pump_input)
+                        # after modal close, loop continues
+            pygame.time.Clock().tick(30)
 
-    def _show_invoice_info(self, net, raw):
-        """Very small parser for ethereum:/bitcoin: URIs; shows results."""
-        t = net.get("type","evm").lower()
-        info = []
-        if t=="evm" and raw.lower().startswith("ethereum:"):
-            core = raw.split(":",1)[1]
-            addr = core.split("@",1)[0].split("?",1)[0]
-            info += [f"ETH URI detected", f"Address: {addr}"]
-            if "?" in core:
-                qs = core.split("?",1)[1]
-                params = {p.split("=")[0]:p.split("=")[1] for p in qs.split("&") if "=" in p}
-                if "value" in params: info.append(f"value: {params['value']}")
-        elif t=="utxo" and raw.lower().startswith("bitcoin:"):
-            core = raw.split(":",1)[1]
-            addr = core.split("?",1)[0]
-            info += [f"BTC URI detected", f"Address: {addr}"]
-            if "?" in core:
-                qs = core.split("?",1)[1]
-                params = {p.split("=")[0]:p.split("=")[1] for p in qs.split("&") if "=" in p}
-                if "amount" in params: info.append(f"amount: {params['amount']}")
-        else:
-            info += ["Raw scan:", raw[:120]]
-
-        # modal
-        while True:
-            self.sc.fill(WHITE)
-            self.sc.blit(self.tf.render("Scanned Invoice", True, BLACK),(8,6))
-            y=28
-            for line in info:
-                self.sc.blit(self.bf.render(line, True, BLACK),(8,y)); y+=16
-            btn=pygame.Rect(self.sw-60, self.sh-26, 52, 20)
-            pygame.draw.rect(self.sc,(220,220,220),btn,border_radius=6); pygame.draw.rect(self.sc, OUT, btn,1,border_radius=6)
-            self.sc.blit(self.bf.render("Close", True, BLACK),(btn.x+6, btn.y+2))
-            pygame.display.flip()
-            for ev in pygame.event.get():
-                if ev.type==pygame.QUIT: return
-                if ev.type==pygame.MOUSEBUTTONDOWN and ev.button==1 and btn.collidepoint(ev.pos):
-                    return
-
-    def _qr_modal(self, text, title):
-        while True:
-            self.sc.fill(WHITE)
-            self.sc.blit(self.tf.render(title, True, BLACK),(8,6))
-            qr=_qr_surface(text, 180); rect=qr.get_rect(center=(self.sw//2, self.sh//2))
-            self.sc.blit(qr, rect)
-            btn=pygame.Rect(self.sw-60, 6, 52, 20)
-            pygame.draw.rect(self.sc, (220,220,220), btn, border_radius=6); pygame.draw.rect(self.sc, OUT, btn, 1, border_radius=6)
-            self.sc.blit(self.bf.render("Close", True, BLACK),(btn.x+6, btn.y+2))
-            pygame.display.flip()
-            for ev in pygame.event.get():
-                if ev.type==pygame.QUIT: return
-                if ev.type==pygame.MOUSEBUTTONDOWN and ev.button==1 and btn.collidepoint(ev.pos): return
-
-    def _wait_back(self):
+    def _alert(self, msg):
+        self._pump()
+        self.sc.fill((255,255,255))
+        self.sc.blit(self.tf.render("Notice", True, (0,0,0)), (8,6))
+        y=34
+        for line in str(msg).split("\n"):
+            self.sc.blit(self.bf.render(line, True, (0,0,0)), (8,y)); y+=16
         btn=pygame.Rect(self.sw-60, self.sh-26, 52, 20)
-        pygame.draw.rect(self.sc, (220,220,220), btn, border_radius=6); pygame.draw.rect(self.sc, OUT, btn, 1, border_radius=6)
-        self.sc.blit(self.bf.render("Back", True, BLACK),(btn.x+10, btn.y+2))
-        pygame.display.flip()
+        pygame.draw.rect(self.sc, (220,220,220), btn, border_radius=6)
+        pygame.draw.rect(self.sc, (0,0,0), btn, 1, border_radius=6)
+        self.sc.blit(self.bf.render("OK", True, (0,0,0)), (btn.x+14, btn.y+2))
+        self.r.draw_bottom_nav()
+        pygame.display.update()
         while True:
+            self._pump()
             for ev in pygame.event.get():
-                if ev.type==pygame.QUIT: return
-                if ev.type==pygame.MOUSEBUTTONDOWN and ev.button==1 and btn.collidepoint(ev.pos): return
+                if ev.type==pygame.QUIT: return None
+                if ev.type==pygame.MOUSEBUTTONDOWN and ev.button==1:
+                    if btn.collidepoint(ev.pos): return None
+                    bh = self.r.bottom_hit(ev.pos)
+                    if bh == "back": return None
+                    if bh == "home": return "HOME"
+                    if bh == "opts": return "SETTINGS"
+            pygame.time.Clock().tick(30)

@@ -1,0 +1,44 @@
+{
+  "name": "ee",
+  "seed_phrase": "moral kitten frog kiwi enact minute human horn charge account busy panic",
+  "accounts": [
+    {
+      "network_key": "ETH",
+      "address": "0x19C7841E2eD32C5Fdb879eFa25Af92D5B9c6eac3",
+      "public_key": "0bff0781fcfb6b09c98216ba2847ead9b470a84b267073fe41b1453dfbff4f8c807d8169bde0ebd226eef2b524b9e87452d8130cc24875cc94c518084c83a133",
+      "private_key": "490fadb5e754d7997b55e1a8cff04755ac52bd470232b4c9f4a6d7ae34f19edc"
+    },
+    {
+      "network_key": "BTC",
+      "address": "bc1qkvxud7hxe8vf5jtrsevmetlhyryey50s6e49r7",
+      "public_key": "027ed0a4d333172d439b7ce3a013456e206f32030dbe62661010f8bcd9ab25bb45",
+      "private_key": "5421ae2fab5cbabe1410de2ef5ab633fdc55309de5541d9c712be1c208326509",
+      "private_key_wif": "Kz3FYoDfu8M31SUyQQdaTSM7Di1HVaoH2FJendi3YsUeH279T47m"
+    },
+    {
+      "network_key": "Q",
+      "address": "0x19C7841E2eD32C5Fdb879eFa25Af92D5B9c6eac3",
+      "public_key": "0bff0781fcfb6b09c98216ba2847ead9b470a84b267073fe41b1453dfbff4f8c807d8169bde0ebd226eef2b524b9e87452d8130cc24875cc94c518084c83a133",
+      "private_key": "490fadb5e754d7997b55e1a8cff04755ac52bd470232b4c9f4a6d7ae34f19edc"
+    },
+    {
+      "network_key": "XDC",
+      "address": "0x19C7841E2eD32C5Fdb879eFa25Af92D5B9c6eac3",
+      "public_key": "0bff0781fcfb6b09c98216ba2847ead9b470a84b267073fe41b1453dfbff4f8c807d8169bde0ebd226eef2b524b9e87452d8130cc24875cc94c518084c83a133",
+      "private_key": "490fadb5e754d7997b55e1a8cff04755ac52bd470232b4c9f4a6d7ae34f19edc"
+    },
+    {
+      "network_key": "XRP",
+      "address": "rEakqXcPtBmsdfKtMzEJUNqapn7915vVzv",
+      "public_key": "03331f9714bf2b5570c309c0df81ce97aeb364522d0d27bc96c28ac20b101fe2ac",
+      "private_key": "97c8e8718aa9f061ec1e438c504be3572b0e0e104ac6fe1b2ec89e71c7563b80"
+    },
+    {
+      "network_key": "WW",
+      "address": "0x19C7841E2eD32C5Fdb879eFa25Af92D5B9c6eac3",
+      "public_key": "0bff0781fcfb6b09c98216ba2847ead9b470a84b267073fe41b1453dfbff4f8c807d8169bde0ebd226eef2b524b9e87452d8130cc24875cc94c518084c83a133",
+      "private_key": "490fadb5e754d7997b55e1a8cff04755ac52bd470232b4c9f4a6d7ae34f19edc"
+    }
+  ],
+  "created_at": 1760779311
+}

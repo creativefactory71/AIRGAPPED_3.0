@@ -1,6 +1,7 @@
 {
-  "version": 1,
-  "iter": 200000,
-  "salt": "RTbIksPVLuIl7M55mRIONQ==",
-  "hash": "AWHQq88+OM+mbCvIxZ2dYcI0ddCL9JbZSOwrPV+f794="
+  "iter": 120000,
+  "salt_hex": "32de621b3eb2b707e0f8ee6251483fa4",
+  "hash_hex": "7ed53e6d17ef625d1c82b69aa1e616e7aa438cc8e87d99c441203038c05ec114",
+  "updated_at": 1760887879,
+  "scheme": "pbkdf2-hmac-sha256"
 }

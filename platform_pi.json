@@ -1,0 +1,14 @@
+{
+  "profile": "pi",
+  "backend": "fbwriter",
+  "screen": { "width": 240, "height": 320, "rotation": "auto" },
+  "fb": { "device": "/dev/fb0", "swap_bytes": true, "target_hz": 30 },
+  "touch": {
+    "device": null,
+    "calib": [200, 3900, 200, 3900],
+    "swap_xy": false,
+    "invertx": true,
+    "inverty": false,
+    "rot": 0
+  }
+}

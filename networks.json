@@ -40,6 +40,14 @@
       "type": "xrp",
       "symbol": "XRP",
       "derivation_path": "m/44'/144'/0'/0/{index}"
+    },
+    {
+      "key": "WW",
+      "name": "ww",
+      "type": "evm",
+      "symbol": "wdd",
+      "chain_id": 41,
+      "derivation_path": "m/44'/60'/0'/0/{index}"
     }
   ]
 }
