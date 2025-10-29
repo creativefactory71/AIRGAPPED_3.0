@@ -42,11 +42,11 @@
       "derivation_path": "m/44'/144'/0'/0/{index}"
     },
     {
-      "key": "WW",
-      "name": "ww",
+      "key": "IED",
+      "name": "dd",
       "type": "evm",
-      "symbol": "wdd",
-      "chain_id": 41,
+      "symbol": "ws",
+      "chain_id": 20,
       "derivation_path": "m/44'/60'/0'/0/{index}"
     }
   ]

@@ -1,208 +1,255 @@
 # on_screen_keyboard.py
-# Touch-friendly QWERTY keyboard (PC + Pi)
-# - Optional pump_input keeps evdev touch flowing on Pi
-# - Shift toggle for upper/lower
-# - Debounce on entry, click-on-release
 from __future__ import annotations
 import time
 import pygame
 
+# Optional debug
+try:
+    from debug import dbg
+except Exception:
+    def dbg(*a, **k): pass
+
+WHITE=(255,255,255); BLACK=(0,0,0); GREY=(230,230,230)
+OUT=(0,0,0)
+
+SAFE_BOTTOM = 24            # height reserved for Back/Home/Opts bar
+SAFE_MARGIN = 6
+COLS = 6                    # fewer columns -> bigger keys
+PAD = 4                     # inner padding between keys
+INPUT_H = 28                # input box height
+
 class OnScreenKeyboard:
-    def __init__(
-        self,
-        screen: pygame.Surface,
-        title: str = "",
-        initial: str = "",
-        pump_input=None,
-        allow_space: bool = True,
-        max_len: int = 256,
-    ):
+    """
+    Bigger-key on-screen keyboard (ASCII labels).
+    API unchanged:
+        OnScreenKeyboard(screen, title, initial, pump_input=None, mask=False).run() -> str | None
+
+    Special keys:
+      - Shift: 'Aa' (toggles to 'aA' when active)
+      - Symbols toggle: '123' <-> 'ABC'
+      - Backspace: 'BK'
+      - Space: 'Space' (spans 2 columns)
+      - Clear: 'CL'
+      - Cancel: '<'
+      - Done: '>'
+    """
+    def __init__(self, screen, title: str = "", initial: str = "",
+                 pump_input=None, mask: bool = False):
         self.sc = screen
-        self.w, self.h = screen.get_size()
-        self.title = title or "Enter text"
-        self.text = initial or ""
+        self.title = title or "Input"
+        self.value = initial or ""
+        self.mask = mask
         self.pump_input = pump_input
-        self.allow_space = allow_space
-        self.max_len = max_len
 
-        pygame.font.init()
-        try:
-            self.tf = pygame.font.SysFont("Verdana", 18, bold=True)
-            self.bf = pygame.font.SysFont("Verdana", 14)
-        except Exception:
-            self.tf = pygame.font.Font(None, 18)
-            self.bf = pygame.font.Font(None, 14)
-
-        # keyboard layout (rows)
-        self.row1 = list("qwertyuiop")
-        self.row2 = list("asdfghjkl")
-        self.row3 = list("zxcvbnm")
-        self.digits = list("1234567890")
-        self.shift = False
-
-        self.margin = 6
-        self.top_h = 44
-        self.line_h = 28
-        self.key_h  = 28
-        self.row_gap = 4
-
-        # build rects later
-        self.rects = {}
-        self._down_key = None
+        self.w, self.h = self.sc.get_size()
+        self._down = None
         self._ignore_until = 0.0
+        self.shift = False
+        self.symbols = False
 
-        # action bar
-        y = self.h - 30
-        third = (self.w - 4*self.margin)//3
-        self.btn_ok     = pygame.Rect(self.margin, y, third, 24)
-        self.btn_cancel = pygame.Rect(self.btn_ok.right + self.margin, y, third, 24)
-        self.btn_bksp   = pygame.Rect(self.btn_cancel.right + self.margin, y, third, 24)
+        self.key_rects = []  # list[(rect, label, span)]
 
-    # ---------- helpers ----------
+    # ---------- lifecycle helpers ----------
+    def _pump(self):
+        if self.pump_input:
+            self.pump_input()
+
     def _debounce_on_entry(self):
-        cleared = pygame.event.clear([pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION])
-        if cleared:
-            # print("osk: debounced", len(cleared), "events")
-            pass
+        pygame.event.clear([pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION])
         self._ignore_until = time.time() + 0.15
 
-    def _draw_top(self):
-        self.sc.fill((245,245,245))
-        self.sc.blit(self.tf.render(self.title, True, (0,0,0)), (6, 6))
-        box = pygame.Rect(6, 22, self.w-12, 18)
-        pygame.draw.rect(self.sc, (255,255,255), box, border_radius=6)
-        pygame.draw.rect(self.sc, (0,0,0), box, 1, border_radius=6)
-        t = self.bf.render(self.text, True, (0,0,0))
-        self.sc.blit(t, (box.x+6, box.y+1))
+    # ---------- layouts ----------
+    def _rows_letters(self):
+        # 6 columns per row; last row balances to 6 with spans
+        return [
+            ["q","w","e","r","t","y"],
+            ["u","i","o","p","a","s"],
+            ["d","f","g","h","j","k"],
+            ["l","z","x","c","v","b"],
+            ["n","m",".",",","Aa","BK"],            # Shift, Backspace
+            ["123","Space(2)","CL","<",">"],        # 1 + 2 + 1 + 1 + 1 = 6
+        ]
 
-    def _row_rects(self):
-        # compute and cache key rects each frame (handles resize)
-        self.rects = {}
-        y = self.top_h + 2
-        # digits row
-        cols = len(self.digits)
-        cell_w = (self.w - self.margin*(cols+1)) // cols
-        for i, ch in enumerate(self.digits):
-            x = self.margin + i*(cell_w + self.margin)
-            r = pygame.Rect(x, y, cell_w, self.key_h)
-            self.rects[ch] = r
-        y += self.key_h + self.row_gap
+    def _rows_symbols(self):
+        return [
+            ["1","2","3","4","5","6"],
+            ["7","8","9","0","-","_"],
+            ["@","#","$","%","&","*"],
+            [".",",","?","!","'",";"],
+            ["/","(",")",":","Aa","BK"],           # keep Shift/Backspace here too
+            ["ABC","Space(2)","CL","<",">"],
+        ]
 
-        # row1
-        cols = len(self.row1)
-        cell_w = (self.w - self.margin*(cols+1)) // cols
-        for i, ch in enumerate(self.row1):
-            x = self.margin + i*(cell_w + self.margin)
-            r = pygame.Rect(x, y, cell_w, self.key_h)
-            self.rects[ch] = r
-        y += self.key_h + self.row_gap
+    def _key_rows(self):
+        return self._rows_symbols() if self.symbols else self._rows_letters()
 
-        # row2
-        cols = len(self.row2)
-        cell_w = (self.w - self.margin*(cols+1)) // cols
-        for i, ch in enumerate(self.row2):
-            x = self.margin + i*(cell_w + self.margin)
-            r = pygame.Rect(x, y, cell_w, self.key_h)
-            self.rects[ch] = r
-        y += self.key_h + self.row_gap
+    # ---------- drawing ----------
+    def _fit_label(self, base_font, text, max_w):
+        """Auto-shrink label to fit if needed."""
+        size = base_font.get_height()
+        font = base_font
+        srf = font.render(text, True, BLACK)
+        while srf.get_width() > max_w and size > 10:
+            size -= 1
+            try: font = pygame.font.SysFont("Verdana", size)
+            except Exception: font = pygame.font.Font(None, size)
+            srf = font.render(text, True, BLACK)
+        return srf
 
-        # row3 + shift + space
-        cols = len(self.row3) + 2  # shift on left/right visually
-        cell_w = (self.w - self.margin*(cols+1)) // cols
-        x = self.margin
-        self.btn_shift = pygame.Rect(x, y, cell_w, self.key_h); x += cell_w + self.margin
-        for ch in self.row3:
-            r = pygame.Rect(x, y, cell_w, self.key_h)
-            self.rects[ch] = r
-            x += cell_w + self.margin
-        self.btn_space = pygame.Rect(x, y, cell_w, self.key_h)
+    def _draw(self):
+        self.sc.fill(WHITE)
+        fg = BLACK
 
-    def _draw_keys(self):
-        # draw all letter/digit keys
-        for ch, r in self.rects.items():
-            pygame.draw.rect(self.sc, (230,230,230), r, border_radius=6)
-            pygame.draw.rect(self.sc, (0,0,0), r, 1, border_radius=6)
-            lab = ch.upper() if self.shift and ch.isalpha() else ch
-            t = self.bf.render(lab, True, (0,0,0))
-            self.sc.blit(t, (r.centerx - t.get_width()//2, r.centery - t.get_height()//2))
+        # Fonts
+        try:
+            tf = pygame.font.SysFont("Verdana", 18, bold=True)
+            bf = pygame.font.SysFont("Verdana", 16)
+            sf = pygame.font.SysFont("Verdana", 14)
+        except Exception:
+            tf = pygame.font.Font(None, 18)
+            bf = pygame.font.Font(None, 16)
+            sf = pygame.font.Font(None, 14)
 
-        # shift
-        for r,lab in ((self.btn_shift, "⇧"), (self.btn_space, "Space")):
-            pygame.draw.rect(self.sc, (230,230,230), r, border_radius=6)
-            pygame.draw.rect(self.sc, (0,0,0), r, 1, border_radius=6)
-            t = self.bf.render(lab, True, (0,0,0))
-            self.sc.blit(t, (r.centerx - t.get_width()//2, r.centery - t.get_height()//2))
+        # Title
+        self.sc.blit(tf.render(self.title, True, fg), (8, 6))
 
-        # action bar
-        for r,lab in ((self.btn_ok,"OK"),(self.btn_cancel,"CANCEL"),(self.btn_bksp,"←")):
-            pygame.draw.rect(self.sc, (230,230,230), r, border_radius=8)
-            pygame.draw.rect(self.sc, (0,0,0), r, 1, border_radius=8)
-            t = self.bf.render(lab, True, (0,0,0))
-            self.sc.blit(t, (r.centerx - t.get_width()//2, r.centery - t.get_height()//2))
+        # Input box
+        input_rect = pygame.Rect(8, 8 + 18, self.w-16, INPUT_H)
+        pygame.draw.rect(self.sc, GREY, input_rect, border_radius=8)
+        pygame.draw.rect(self.sc, OUT, input_rect, 1, border_radius=8)
+        disp = ("*"*len(self.value)) if self.mask else self.value
+        # trim visually if too long
+        trimmed = disp
+        srf = bf.render(trimmed, True, fg)
+        while srf.get_width() > input_rect.width-12 and len(trimmed) > 0:
+            trimmed = trimmed[1:]
+            srf = bf.render(trimmed, True, fg)
+        self.sc.blit(srf, (input_rect.x+6, input_rect.y+(INPUT_H//2 - srf.get_height()//2)))
 
-    def _hit(self, pos):
-        # action buttons
-        if self.btn_ok.collidepoint(pos): return ("act","OK")
-        if self.btn_cancel.collidepoint(pos): return ("act","CANCEL")
-        if self.btn_bksp.collidepoint(pos): return ("act","BKSP")
-        # special row
-        if self.btn_shift.collidepoint(pos): return ("sp","SHIFT")
-        if self.btn_space.collidepoint(pos): return ("sp","SPACE")
-        # keys
-        for ch, r in self.rects.items():
-            if r.collidepoint(pos):
-                return ("key", ch)
-        return None
+        # Keyboard grid area (leave safe bottom for nav bar)
+        top = input_rect.bottom + SAFE_MARGIN
+        bottom = self.h - SAFE_BOTTOM - SAFE_MARGIN
+        kh = max(90, bottom - top)
+        rows = self._key_rows()
+        n_rows = len(rows)
 
-    def _apply(self, kind, lab):
-        if kind == "act":
-            if lab == "OK": return "OK"
-            if lab == "CANCEL": return "CANCEL"
-            if lab == "BKSP":
-                self.text = self.text[:-1] if self.text else ""
-                return None
-        if kind == "sp":
-            if lab == "SHIFT":
-                self.shift = not self.shift
-            elif lab == "SPACE" and self.allow_space:
-                if len(self.text) < self.max_len:
-                    self.text += " "
-            return None
-        if kind == "key":
-            ch = lab.upper() if (self.shift and lab.isalpha()) else lab
-            if len(self.text) < self.max_len:
-                self.text += ch
-            return None
+        # metrics
+        row_h = (kh - (n_rows+1)*PAD) // n_rows
+        row_h = max(row_h, 22)
+        col_w = (self.w - (COLS+1)*PAD) // COLS
 
-    # ---------- public ----------
+        self.key_rects = []
+        y = top + PAD
+        for row in rows:
+            x = PAD
+            col_used = 0
+            for spec in row:
+                span = 1
+                label = spec
+                if spec.endswith("(2)"):
+                    label = spec[:-3]
+                    span = 2
+                width = span*col_w + (span-1)*PAD
+                r = pygame.Rect(x, y, width, row_h)
+
+                # draw
+                pygame.draw.rect(self.sc, GREY, r, border_radius=8)
+                pygame.draw.rect(self.sc, OUT, r, 1, border_radius=8)
+
+                # visible label (Shift shows Aa / aA)
+                vis = label
+                if label == "Aa":
+                    vis = "aA" if self.shift else "Aa"
+
+                srf = self._fit_label(bf, vis, max_w=r.width-8)
+                self.sc.blit(srf, (r.centerx - srf.get_width()//2,
+                                   r.centery - srf.get_height()//2))
+
+                self.key_rects.append((r, label, span))
+                x += width + PAD
+                col_used += span
+
+            # spacer if row shorter than COLS (should not occur with these rows)
+            if col_used < COLS:
+                spacer_w = (COLS-col_used)*col_w + (COLS-col_used-1)*PAD
+                pygame.draw.rect(self.sc, WHITE, pygame.Rect(x, y, spacer_w, row_h))
+            y += row_h + PAD
+
+        pygame.display.update()
+
+    # ---------- key handling ----------
+    def _emit_char(self, label: str):
+        # Normal characters
+        if len(label) == 1 and label.isprintable() and label not in {"<", ">", }:
+            ch = label.upper() if (self.shift and label.isalpha()) else (
+                 label.lower() if (not self.shift and label.isalpha()) else label)
+            self.value += ch
+            dbg(f"[OSK] char: {ch!r} → {self.value!r}")
+            return
+
+        # Special actions
+        if label == "Aa":          # Shift toggle
+            self.shift = not self.shift
+            dbg(f"[OSK] shift={self.shift}")
+            return
+        if label == "123":         # switch to symbols
+            self.symbols = True
+            dbg("[OSK] symbols=True")
+            return
+        if label == "ABC":         # back to letters
+            self.symbols = False
+            dbg("[OSK] symbols=False")
+            return
+        if label == "Space":       # space (spans 2 cols)
+            self.value += " "
+            dbg(f"[OSK] space → {self.value!r}")
+            return
+        if label == "BK":          # backspace
+            self.value = self.value[:-1]
+            dbg(f"[OSK] backspace → {self.value!r}")
+            return
+        if label == "CL":          # clear
+            self.value = ""
+            dbg("[OSK] cleared")
+            return
+        # '<' (Cancel) and '>' (Done) handled in main loop
+
+    # ---------- main ----------
     def run(self) -> str | None:
         self._debounce_on_entry()
+        dbg(f"[OSK] open: title={self.title!r} initial={self.value!r}")
+        clock = pygame.time.Clock()
+        down_idx = None
 
         while True:
-            if self.pump_input:
-                self.pump_input()
-
-            # layout & draw
-            self._draw_top()
-            self._row_rects()
-            self._draw_keys()
-            pygame.display.update()
+            self._pump()
+            self._draw()
 
             for ev in pygame.event.get():
                 if ev.type == pygame.QUIT:
                     return None
                 if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
-                    if time.time() < self._ignore_until:
-                        continue
-                    self._down_key = self._hit(ev.pos)
+                    if time.time() < self._ignore_until: continue
+                    for i, (r, lab, span) in enumerate(self.key_rects):
+                        if r.collidepoint(ev.pos):
+                            down_idx = i
+                            break
                 if ev.type == pygame.MOUSEBUTTONUP and ev.button == 1:
-                    if self._down_key:
-                        up = self._hit(ev.pos)
-                        if up == self._down_key:
-                            kind, lab = self._down_key
-                            res = self._apply(kind, lab)
-                            if res == "OK": return self.text
-                            if res == "CANCEL": return None
-                        self._down_key = None
+                    up_idx = None
+                    for i, (r, lab, span) in enumerate(self.key_rects):
+                        if r.collidepoint(ev.pos):
+                            up_idx = i
+                            break
+                    if down_idx is not None and up_idx == down_idx:
+                        _, label, _ = self.key_rects[up_idx]
+                        if label == "<":     # Cancel
+                            dbg("[OSK] cancel")
+                            return None
+                        if label == ">":     # Done
+                            dbg(f"[OSK] done → {self.value!r}")
+                            return self.value
+                        self._emit_char(label)
+                        self._ignore_until = time.time() + 0.06
+                    down_idx = None
 
-            pygame.time.Clock().tick(30)
+            clock.tick(30)

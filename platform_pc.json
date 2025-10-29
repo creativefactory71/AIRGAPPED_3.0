@@ -1,0 +1,9 @@
+{
+  "profile": "pc",
+  "screen": { "width": 240, "height": 320, "rotation": 0 },
+  "backend": "window",
+  "touch": { "device": null },                      
+  "qr_scanner": { "backend_pc": "opencv" },        
+  "debug": true,                                  
+  "debug_overlay": false
+}
